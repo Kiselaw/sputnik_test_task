@@ -1,0 +1,64 @@
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: app.Dockerfile
+    container_name: backend
+    volumes:
+      - ./backend:/backend
+    env_file: ".env.dev"
+    environment:
+      RUN_MIGRATIONS: "1"
+      WEB_RELOAD: "1"
+    ports:
+      - "8000:8000"
+    depends_on:
+      backend-db:
+        condition: service_healthy
+      backend-redis:
+        condition: service_started
+
+  backend-worker:
+    build:
+      context: ./backend
+      dockerfile: worker.Dockerfile
+    container_name: backend-worker
+    env_file: ".env.dev"
+    ports:
+      - "5555:5555"
+    volumes:
+      - ./backend:/backend
+    depends_on:
+      backend:
+        condition: service_started
+      backend-redis:
+        condition: service_started
+
+  backend-db:
+    image: postgres:18.4
+    container_name: backend-db
+    ports:
+      - "5433:5433"
+    env_file: ".env.dev"
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}" ]
+      interval: 2s
+      timeout: 5s
+      retries: 20
+    volumes:
+      - backend-db-volume:/var/lib/postgresql
+
+  backend-redis:
+    image: redis:8.8.0
+    container_name: backend-redis
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: frontend
+    ports:
+      - "3000:3000"
+
+volumes:
+  backend-db-volume:
